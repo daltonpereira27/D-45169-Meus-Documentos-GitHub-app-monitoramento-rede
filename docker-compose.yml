@@ -1,0 +1,45 @@
+# Define a versão do Docker Compose.
+version: '3.8'
+
+# Define os serviços (contentores) que compõem a aplicação.
+services:
+  # Serviço do banco de dados PostgreSQL.
+  db:
+    image: postgres:13-alpine # Utiliza uma imagem oficial e leve do PostgreSQL.
+    container_name: postgres_db
+    restart: always # Reinicia sempre o contentor se ele parar.
+    environment:
+      # Define as variáveis de ambiente para o banco de dados.
+      # IMPORTANTE: Em produção real, utilize segredos (Docker secrets) em vez de texto simples.
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password
+      POSTGRES_DB: network_monitor
+    volumes:
+      # Cria um volume para persistir os dados do banco de dados, mesmo que o contentor seja removido.
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Mapeia a porta 5432 do contentor para a porta 5433 da sua máquina local (para evitar conflitos).
+      - "5433:5432"
+
+  # Serviço da aplicação (Backend em Node.js).
+  app:
+    container_name: backend_app
+    build: . # Constrói a imagem a partir do Dockerfile no diretório atual.
+    restart: always
+    ports:
+      # Mapeia a porta 3000 do contentor para a porta 8080 da sua máquina local.
+      - "8080:3000"
+    environment:
+      # Passa as credenciais do banco de dados para a aplicação.
+      DB_HOST: db # O nome do serviço do banco de dados ('db') é o hostname para a conexão.
+      DB_USER: admin
+      DB_PASSWORD: admin_password
+      DB_NAME: network_monitor
+      DB_PORT: 5432
+    depends_on:
+      # Garante que o serviço 'db' seja iniciado antes do serviço 'app'.
+      - db
+
+# Define os volumes que serão geridos pelo Docker.
+volumes:
+  postgres_data:

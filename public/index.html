@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Monitoramento de Rede</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-bar { transition: width 0.5s ease-in-out; }
+        #chart-tooltip {
+            position: absolute;
+            background-color: rgba(26, 32, 44, 0.9);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+    <div id="connection-status" class="p-2 text-center text-white font-semibold bg-yellow-600">
+        Conectando ao servidor...
+    </div>
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-cyan-400">Dashboard de Monitoramento de Rede</h1>
+            <p class="text-gray-400 mt-2">Registre e acompanhe as ocorrências da sua infraestrutura de rede.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Coluna de Ações (Formulários) -->
+            <div class="lg:col-span-1 space-y-8">
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 id="form-title" class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white">Registrar Ocorrência</h2>
+                    <form id="report-form" class="space-y-4">
+                        <!-- Os campos do formulário permanecem os mesmos -->
+                        <input type="hidden" id="report-id">
+                        <div>
+                            <label for="report-date" class="block text-sm font-medium text-gray-300 mb-1">Data</label>
+                            <input type="date" id="report-date" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        </div>
+                        <div>
+                            <label for="location-select" class="block text-sm font-medium text-gray-300 mb-1">Local</label>
+                            <select id="location-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                <option>Carregando locais...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="incident-select" class="block text-sm font-medium text-gray-300 mb-1">Tipo de Incidente</label>
+                            <select id="incident-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"></select>
+                        </div>
+                        <div id="custom-description-wrapper" class="hidden">
+                             <label for="report-description" class="block text-sm font-medium text-gray-300 mb-1">Descrição Customizada</label>
+                            <textarea id="report-description" rows="3" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Descreva o incidente..."></textarea>
+                        </div>
+                        <div>
+                            <label for="report-comments" class="block text-sm font-medium text-gray-300 mb-1">Comentários (Opcional)</label>
+                            <textarea id="report-comments" rows="3" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Adicione observações..."></textarea>
+                        </div>
+                        <div>
+                            <label for="report-response-time" class="block text-sm font-medium text-gray-300 mb-1">Tempo de Resposta (Opcional)</label>
+                            <input type="text" id="report-response-time" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Ex: 15 minutos">
+                        </div>
+                        <div>
+                            <label for="report-closure-time" class="block text-sm font-medium text-gray-300 mb-1">Tempo de Fechamento (Opcional)</label>
+                            <input type="text" id="report-closure-time" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Ex: 8 horas">
+                        </div>
+                        <div id="report-form-message" class="text-red-400 text-sm hidden"></div>
+                        <div class="flex gap-2">
+                            <button type="submit" id="save-report-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar Relatório</button>
+                            <button type="button" id="cancel-edit-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hidden">Cancelar Edição</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white">Gerenciar Locais</h2>
+                    <form id="location-form" class="flex gap-2 mb-4">
+                        <input type="text" id="location-name" class="flex-grow bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Nome do novo local">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar</button>
+                    </form>
+                    <div id="location-form-message" class="text-red-400 text-sm hidden mb-2"></div>
+                    <div id="locations-list" class="space-y-2"></div>
+                </div>
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white">Emissão de Relatórios</h2>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button id="weekly-report-btn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg">Relatório Semanal</button>
+                        <button id="monthly-report-btn" class="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg">Relatório Mensal</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna de Dashboard e Relatórios -->
+            <div class="lg:col-span-2 space-y-8">
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 text-white">Dashboard de Incidências por Tipo</h2>
+                    <div class="relative h-80"><canvas id="incident-pie-chart"></canvas></div>
+                </div>
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 text-white">Dashboard de Incidências por Local</h2>
+                    <div id="incidents-chart" class="space-y-4"></div>
+                </div>
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                         <h2 class="text-2xl font-semibold text-white">Relatórios Recentes</h2>
+                         <p class="text-xs text-gray-400">SLA: > 8 horas de fechamento = <span class="text-red-400 font-semibold">Fora do SLA</span></p>
+                    </div>
+                    <div id="reports-list" class="space-y-4 max-h-96 overflow-y-auto pr-2"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <div id="chart-tooltip" class="hidden"></div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const API_URL = 'http://localhost:8080';
+
+            const connectionStatus = document.getElementById('connection-status');
+            const locationForm = document.getElementById('location-form');
+            const locationNameInput = document.getElementById('location-name');
+            const locationsList = document.getElementById('locations-list');
+            const locationSelect = document.getElementById('location-select');
+            const reportForm = document.getElementById('report-form');
+            const reportsList = document.getElementById('reports-list');
+            const incidentSelect = document.getElementById('incident-select');
+            const customDescriptionWrapper = document.getElementById('custom-description-wrapper');
+            const reportFormMessage = document.getElementById('report-form-message');
+
+            let allReportsData = [];
+            let incidentPieChart;
+            let isConnected = false;
+
+            const predefinedIncidents = [
+                "INDISPONIBILIDADE DO LINK PRINCIPAL DE INTERNET", "FALHA NO BACKBONE - OPERADORA PARA O TJAP",
+                "ROMPIMENTO DE FIBRA OPTICA, AFETANDO UMA UNIDADE", "ROMPIMENTO DE FIBRA OPTICA, AFETANDO MAIS DE UMA UNIDADE",
+                "FALHA NA COMUNICAÇÃO EM RAZAO DE TRAVAMENTO OU QUEIMA DE EQUIPAMENTOS TJAP",
+                "FALHA NA COMUNICACAO EM RAZAO DE FALTA DE ENERGIA", "LENTIDÃO DO LINK PRINCIPAL DE INTERNET", "Outro"
+            ];
+
+            async function fetchLocations() {
+                try {
+                    const response = await fetch(`${API_URL}/api/locations`);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    
+                    if (!isConnected) {
+                        connectionStatus.textContent = 'Conectado';
+                        connectionStatus.className = 'p-2 text-center text-white font-semibold bg-green-600';
+                        isConnected = true;
+                    }
+
+                    const locations = await response.json();
+                    renderLocations(locations);
+                    updateLocationDropdown(locations);
+                } catch (error) {
+                    console.error('Erro ao buscar locais:', error);
+                    if (!isConnected) {
+                        connectionStatus.textContent = 'Falha na Conexão. Verifique se o Docker está a correr.';
+                        connectionStatus.className = 'p-2 text-center text-white font-semibold bg-red-600';
+                    }
+                }
+            }
+
+            async function fetchReports() {
+                try {
+                    const response = await fetch(`${API_URL}/api/reports`);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    allReportsData = await response.json();
+                    renderReports(allReportsData);
+                    updateDashboard(allReportsData);
+                    updateIncidentTypeDashboard(allReportsData);
+                } catch (error) {
+                    console.error('Erro ao buscar relatórios:', error);
+                }
+            }
+            
+            function renderLocations(locations) {
+                locationsList.innerHTML = '';
+                if (locations.length === 0) {
+                    locationsList.innerHTML = '<p class="text-gray-500 text-sm">Nenhum local cadastrado.</p>';
+                    return;
+                }
+                locations.forEach(location => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center bg-gray-700 p-2 rounded-lg';
+                    div.innerHTML = `<span class="text-white">${location.name}</span>`;
+                    locationsList.appendChild(div);
+                });
+            }
+
+            function updateLocationDropdown(locations) {
+                locationSelect.innerHTML = '';
+                if (locations.length === 0) {
+                    locationSelect.innerHTML = '<option disabled selected>Cadastre um local</option>';
+                } else {
+                    locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location.name;
+                        option.textContent = location.name;
+                        locationSelect.appendChild(option);
+                    });
+                }
+            }
+            
+            function renderReports(reports) {
+                reportsList.innerHTML = '';
+                if (reports.length === 0) {
+                    reportsList.innerHTML = '<p class="text-gray-500 text-sm">Nenhum relatório registrado.</p>';
+                    return;
+                }
+                reports.forEach(report => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-gray-700 p-4 rounded-lg';
+                    const formattedDate = new Date(report.report_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                    
+                    div.innerHTML = `
+                        <p class="font-bold text-cyan-400">${report.location}</p>
+                        <p class="text-sm text-gray-400">${formattedDate}</p>
+                        <p class="mt-2 text-gray-200">${report.description}</p>
+                        ${report.comments ? `<p class="mt-2 text-sm text-gray-300 italic"><strong>Comentário:</strong> ${report.comments}</p>` : ''}
+                    `;
+                    reportsList.appendChild(div);
+                });
+            }
+
+            locationForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = locationNameInput.value.trim();
+                if (!name) return;
+                try {
+                    await fetch(`${API_URL}/api/locations`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    });
+                    locationNameInput.value = '';
+                    fetchLocations();
+                } catch (error) {
+                    console.error('Erro ao adicionar local:', error);
+                }
+            });
+            
+            reportForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                let description = document.getElementById('incident-select').value;
+                if (description === 'Outro') {
+                    description = document.getElementById('report-description').value.trim();
+                }
+
+                const reportData = {
+                    report_date: document.getElementById('report-date').value,
+                    location: document.getElementById('location-select').value,
+                    description: description,
+                    comments: document.getElementById('report-comments').value.trim(),
+                    response_time: document.getElementById('report-response-time').value.trim(),
+                    closure_time: document.getElementById('report-closure-time').value.trim(),
+                };
+
+                if (!reportData.report_date || !reportData.location || !reportData.description) {
+                    reportFormMessage.textContent = 'Data, Local e Tipo de Incidente são obrigatórios.';
+                    reportFormMessage.classList.remove('hidden');
+                    return;
+                }
+
+                try {
+                    await fetch(`${API_URL}/api/reports`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(reportData)
+                    });
+                    reportForm.reset();
+                    setDefaultDate();
+                    fetchReports();
+                    reportFormMessage.classList.add('hidden');
+                } catch (error) {
+                    console.error('Erro ao adicionar relatório:', error);
+                    reportFormMessage.textContent = 'Falha ao salvar o relatório.';
+                    reportFormMessage.classList.remove('hidden');
+                }
+            });
+
+            function updateDashboard(reports) {
+                const incidentsChart = document.getElementById('incidents-chart');
+                incidentsChart.innerHTML = '';
+                if (reports.length === 0) {
+                    incidentsChart.innerHTML = '<p class="text-gray-500 text-sm">Sem dados para exibir.</p>';
+                    return;
+                }
+                const incidentsByLocation = reports.reduce((acc, report) => {
+                    acc[report.location] = (acc[report.location] || 0) + 1;
+                    return acc;
+                }, {});
+                
+                Object.entries(incidentsByLocation).forEach(([location, count]) => {
+                    const barElement = document.createElement('div');
+                     barElement.innerHTML = `<div class="flex justify-between items-center"><span class="text-sm">${location}</span><span class="text-sm font-bold">${count}</span></div>`;
+                    incidentsChart.appendChild(barElement);
+                });
+            }
+
+            function updateIncidentTypeDashboard(reports) {
+                const ctx = document.getElementById('incident-pie-chart').getContext('2d');
+                if (!ctx) return;
+
+                const incidentsByType = reports.reduce((acc, report) => {
+                    const desc = report.description;
+                    acc[desc] = (acc[desc] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const labels = Object.keys(incidentsByType);
+                const data = Object.values(incidentsByType);
+
+                if (incidentPieChart) incidentPieChart.destroy();
+                
+                incidentPieChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{ data: data, backgroundColor: ['#22d3ee', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444', '#10b981', '#6366f1'] }]
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#d1d5db'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function setDefaultDate() {
+                document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
+            }
+            
+            function populateIncidentSelect() {
+                predefinedIncidents.forEach(incident => {
+                    const option = document.createElement('option');
+                    option.value = incident;
+                    option.textContent = incident;
+                    incidentSelect.appendChild(option);
+                });
+            }
+
+            incidentSelect.addEventListener('change', (e) => {
+                customDescriptionWrapper.classList.toggle('hidden', e.target.value !== 'Outro');
+            });
+            
+            setDefaultDate();
+            populateIncidentSelect();
+            fetchLocations();
+            fetchReports();
+        });
+    </script>
+</body>
+</html>
