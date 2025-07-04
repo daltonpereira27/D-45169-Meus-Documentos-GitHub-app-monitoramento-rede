@@ -1,13 +1,13 @@
 const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
-const cors = require('cors'); // <-- ADICIONADO: Importa o pacote CORS
+const cors = require('cors');
 
 const app = express();
 const PORT = 3000;
 
 // --- Middlewares ---
-app.use(cors()); // <-- ADICIONADO: Habilita o CORS para todas as origens
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -67,10 +67,21 @@ app.post('/api/locations', async (req, res) => {
   }
 });
 
+app.delete('/api/locations/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM locations WHERE id = $1', [id]);
+        res.status(204).send(); // 204 No Content
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // --- API Endpoints para Relatórios ---
 app.get('/api/reports', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM reports ORDER BY report_date DESC');
+    const result = await pool.query('SELECT * FROM reports ORDER BY report_date DESC, id DESC');
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -90,6 +101,31 @@ app.post('/api/reports', async (req, res) => {
   }
 });
 
+app.put('/api/reports/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { report_date, location, description, comments, response_time, closure_time } = req.body;
+        const result = await pool.query(
+            'UPDATE reports SET report_date = $1, location = $2, description = $3, comments = $4, response_time = $5, closure_time = $6 WHERE id = $7 RETURNING *',
+            [report_date, location, description, comments, response_time, closure_time, id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/reports/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM reports WHERE id = $1', [id]);
+        res.status(204).send(); // 204 No Content
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // Rota principal para servir o frontend.
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -98,5 +134,5 @@ app.get('/', (req, res) => {
 // Inicia o servidor.
 app.listen(PORT, async () => {
   console.log(`Servidor a correr na porta ${PORT}`);
-  await createTables(); // Garante que as tabelas existem ao iniciar.
+  await createTables();
 });
