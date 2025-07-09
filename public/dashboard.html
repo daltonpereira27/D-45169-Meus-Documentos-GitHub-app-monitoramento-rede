@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Monitoramento</title>
+    <title>Dashboard de Gestão</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style> body { font-family: 'Inter', sans-serif; } </style>
     <script>
         // VERIFICAÇÃO DE SEGURANÇA: Executa antes de qualquer outra coisa
         const token = localStorage.getItem('authToken');
         if (!token) {
-            // Se não houver token, expulsa o utilizador para a página de login
             window.location.href = '/login.html';
         }
     </script>
@@ -23,7 +23,7 @@
         <div class="container mx-auto flex justify-between items-center">
             <div>
                 <h1 class="text-xl font-bold text-cyan-400">Dashboard de Gestão</h1>
-                <p id="welcome-message" class="text-sm text-gray-400"></p>
+                <p id="welcome-message" class="text-sm text-gray-400">A carregar...</p>
             </div>
             <button id="logout-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Sair</button>
         </div>
@@ -36,20 +36,205 @@
                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
                     <h2 class="text-2xl font-semibold mb-4 pb-2 border-b border-gray-700">Registrar Ocorrência</h2>
                     <form id="report-form" class="space-y-4">
-                        <!-- Formulário completo aqui -->
+                        <input type="hidden" id="report-id">
+                        <div>
+                            <label for="report-date" class="block text-sm">Data</label>
+                            <input type="date" id="report-date" class="mt-1 w-full bg-gray-700 rounded p-2">
+                        </div>
+                        <div>
+                            <label for="location-select" class="block text-sm">Local</label>
+                            <select id="location-select" class="mt-1 w-full bg-gray-700 rounded p-2"></select>
+                        </div>
+                        <div>
+                            <label for="incident-select" class="block text-sm">Tipo de Incidente</label>
+                            <select id="incident-select" class="mt-1 w-full bg-gray-700 rounded p-2"></select>
+                        </div>
+                        <div>
+                            <label for="report-comments" class="block text-sm">Comentários</label>
+                            <textarea id="report-comments" rows="3" class="mt-1 w-full bg-gray-700 rounded p-2"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar Relatório</button>
                     </form>
+                </div>
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">Emissão de Relatórios</h2>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button id="weekly-report-btn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg">Relatório Semanal</button>
+                        <button id="monthly-report-btn" class="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg">Relatório Mensal</button>
+                    </div>
                 </div>
             </div>
             <!-- Coluna de Dashboards -->
             <div class="lg:col-span-2 space-y-8">
-                <!-- Dashboards e listas aqui -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Dashboard de Incidências por Local</h2>
+                    <div id="incidents-chart" class="space-y-4"></div>
+                </div>
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Relatórios Recentes</h2>
+                    <div id="reports-list" class="space-y-4 max-h-96 overflow-y-auto pr-2"></div>
+                </div>
             </div>
         </main>
     </div>
     
     <script>
-        // O resto do seu JavaScript para a página de dashboard vai aqui...
-        // (buscar dados privados, renderizar, etc.)
+        // A VERIFICAÇÃO DE SEGURANÇA JÁ FOI FEITA NO <HEAD>
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const token = localStorage.getItem('authToken');
+
+            // --- Referências do DOM ---
+            const welcomeMessage = document.getElementById('welcome-message');
+            const logoutBtn = document.getElementById('logout-btn');
+            const reportsList = document.getElementById('reports-list');
+            const incidentsChart = document.getElementById('incidents-chart');
+            const locationSelect = document.getElementById('location-select');
+            const incidentSelect = document.getElementById('incident-select');
+            const reportForm = document.getElementById('report-form');
+
+            const predefinedIncidents = [
+                "INDISPONIBILIDADE DO LINK PRINCIPAL DE INTERNET", "FALHA NO BACKBONE - OPERADORA PARA O TJAP",
+                "ROMPIMENTO DE FIBRA OPTICA, AFETANDO UMA UNIDADE", "ROMPIMENTO DE FIBRA OPTICA, AFETANDO MAIS DE UMA UNIDADE",
+                "FALHA NA COMUNICAÇÃO EM RAZAO DE TRAVAMENTO OU QUEIMA DE EQUIPAMENTOS TJAP",
+                "FALHA NA COMUNICACAO EM RAZAO DE FALTA DE ENERGIA", "LENTIDÃO DO LINK PRINCIPAL DE INTERNET", "Outro"
+            ];
+
+            // --- Configuração Inicial da UI ---
+            welcomeMessage.textContent = `Bem-vindo, ${user.username}! (Papel: ${user.role})`;
+            logoutBtn.addEventListener('click', () => {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+                window.location.href = '/';
+            });
+
+            // --- Funções de Fetch de Dados ---
+            async function fetchPrivateData() {
+                const headers = { 'Authorization': `Bearer ${token}` };
+                try {
+                    const [reportsRes, locationsRes] = await Promise.all([
+                        fetch('/api/reports', { headers }),
+                        fetch('/api/locations', { headers })
+                    ]);
+                    if (!reportsRes.ok || !locationsRes.ok) {
+                        throw new Error('Falha ao buscar dados privados. A sua sessão pode ter expirado.');
+                    }
+                    return await Promise.all([reportsRes.json(), locationsRes.json()]);
+                } catch (error) {
+                    console.error(error);
+                    // Se houver erro (ex: token expirado), redireciona para o login
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login.html';
+                }
+            }
+
+            // --- Funções de Renderização ---
+            function renderReports(reports) {
+                reportsList.innerHTML = '';
+                if (!reports || reports.length === 0) {
+                    reportsList.innerHTML = '<p class="text-gray-500">Nenhum relatório registrado.</p>';
+                    return;
+                }
+                reports.forEach(report => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-gray-700 p-4 rounded-lg';
+                    const formattedDate = new Date(report.report_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <p class="font-bold text-cyan-400">${report.location}</p>
+                            <p class="text-sm text-gray-400">${formattedDate}</p>
+                        </div>
+                        <p class="mt-2 text-gray-200">${report.description}</p>
+                        ${report.comments ? `<p class="mt-2 text-sm text-gray-300 italic"><strong>Comentário:</strong> ${report.comments}</p>` : ''}
+                    `;
+                    reportsList.appendChild(div);
+                });
+            }
+
+            function updateDashboard(reports) {
+                incidentsChart.innerHTML = '';
+                if (!reports || reports.length === 0) {
+                    incidentsChart.innerHTML = '<p class="text-gray-500">Sem dados para exibir.</p>';
+                    return;
+                }
+                const incidentsByLocation = reports.reduce((acc, report) => {
+                    acc[report.location] = (acc[report.location] || 0) + 1;
+                    return acc;
+                }, {});
+                
+                Object.entries(incidentsByLocation).forEach(([location, count]) => {
+                    const barElement = document.createElement('div');
+                    barElement.innerHTML = `<div class="flex justify-between items-center"><span class="text-sm">${location}</span><span class="text-sm font-bold">${count}</span></div>`;
+                    incidentsChart.appendChild(barElement);
+                });
+            }
+
+            function updateLocationDropdown(locations) {
+                locationSelect.innerHTML = '';
+                if (!locations || locations.length === 0) {
+                    locationSelect.innerHTML = '<option disabled selected>Cadastre um local</option>';
+                } else {
+                    locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location.name;
+                        option.textContent = location.name;
+                        locationSelect.appendChild(option);
+                    });
+                }
+            }
+
+            function populateIncidentSelect() {
+                incidentSelect.innerHTML = '';
+                predefinedIncidents.forEach(incident => {
+                    const option = document.createElement('option');
+                    option.value = incident;
+                    option.textContent = incident;
+                    incidentSelect.appendChild(option);
+});
+            }
+
+            // --- Lógica do Formulário ---
+            reportForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const reportData = {
+                    report_date: document.getElementById('report-date').value,
+                    location: document.getElementById('location-select').value,
+                    description: document.getElementById('incident-select').value,
+                    comments: document.getElementById('report-comments').value,
+                };
+                
+                try {
+                    const response = await fetch('/api/reports', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(reportData)
+                    });
+                    if (!response.ok) throw new Error('Falha ao criar relatório.');
+                    reportForm.reset();
+                    initialize(); // Recarrega todos os dados
+                } catch (error) {
+                    console.error(error);
+                    alert('Erro ao salvar relatório.');
+                }
+            });
+
+            // --- Inicialização da Página ---
+            async function initialize() {
+                const [reports, locations] = await fetchPrivateData();
+                renderReports(reports);
+                updateDashboard(reports);
+                updateLocationDropdown(locations);
+                populateIncidentSelect();
+                document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
+            }
+
+            initialize();
+        });
     </script>
 </body>
 </html>
