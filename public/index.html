@@ -34,7 +34,12 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorMessage = document.getElementById('error-message');
+            const submitButton = e.target.querySelector('button[type="submit"]');
             
+            submitButton.disabled = true;
+            submitButton.textContent = 'Autenticando...';
+            errorMessage.classList.add('hidden');
+
             try {
                 const response = await fetch('/api/login', {
                     method: 'POST',
@@ -47,16 +52,26 @@
                     throw new Error(errorData.message || 'Credenciais inválidas.');
                 }
 
-                // AQUI ESTÁ A CORREÇÃO: Agora guardamos o token E as informações do utilizador.
+                submitButton.classList.remove('bg-cyan-600', 'hover:bg-cyan-700');
+                submitButton.classList.add('bg-green-600');
+                submitButton.textContent = 'Sucesso! Redirecionando...';
+
                 const { token, user } = await response.json();
+
                 localStorage.setItem('authToken', token);
-                localStorage.setItem('user', JSON.stringify(user)); // Guarda o objeto do utilizador
-                
-                window.location.href = '/'; // Redireciona para o dashboard principal
+                localStorage.setItem('user', JSON.stringify(user));
+
+                setTimeout(() => {
+                    // Usar .assign() para forçar um recarregamento da página a partir do servidor
+                    window.location.assign('/');
+                }, 1500);
 
             } catch (error) {
                 errorMessage.textContent = error.message;
                 errorMessage.classList.remove('hidden');
+                
+                submitButton.disabled = false;
+                submitButton.textContent = 'Entrar';
             }
         });
     </script>

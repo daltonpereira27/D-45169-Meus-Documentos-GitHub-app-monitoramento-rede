@@ -34,7 +34,13 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorMessage = document.getElementById('error-message');
+            const submitButton = e.target.querySelector('button[type="submit"]');
             
+            // Desativa o botão para evitar múltiplos cliques
+            submitButton.disabled = true;
+            submitButton.textContent = 'Autenticando...';
+            errorMessage.classList.add('hidden');
+
             try {
                 const response = await fetch('/api/login', {
                     method: 'POST',
@@ -43,16 +49,31 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Credenciais inválidas.');
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Credenciais inválidas.');
                 }
 
-                const { token } = await response.json();
-                localStorage.setItem('authToken', token);
-                window.location.href = '/'; // Redireciona para o dashboard principal
+                // --- FEEDBACK DE SUCESSO ---
+                submitButton.classList.remove('bg-cyan-600', 'hover:bg-cyan-700');
+                submitButton.classList.add('bg-green-600');
+                submitButton.textContent = 'Sucesso! Redirecionando...';
+
+                const { token, user } = await response.json();
+
+                // Espera 1.5 segundos para o utilizador ver a mensagem antes de redirecionar
+                setTimeout(() => {
+                    localStorage.setItem('authToken', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    window.location.href = '/';
+                }, 1500);
 
             } catch (error) {
                 errorMessage.textContent = error.message;
                 errorMessage.classList.remove('hidden');
+                
+                // Reativa o botão em caso de erro
+                submitButton.disabled = false;
+                submitButton.textContent = 'Entrar';
             }
         });
     </script>
