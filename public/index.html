@@ -7,28 +7,31 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+    <style> body { font-family: 'Inter', sans-serif; } </style>
 </head>
 <body class="bg-gray-900 text-gray-100">
 
-    <div id="connection-status" class="p-2 text-center text-white font-semibold bg-yellow-600 transition-colors duration-500">
-        Conectando ao servidor...
-    </div>
+    <!-- Cabeçalho Dinâmico -->
+    <header class="bg-gray-800 p-4 shadow-md sticky top-0 z-10">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-cyan-400">Dashboard de Monitoramento</h1>
+                <p id="welcome-message" class="text-sm text-gray-400">Visão Pública</p>
+            </div>
+            <div id="auth-controls">
+                <!-- Botões de Login/Logout aparecerão aqui -->
+            </div>
+        </div>
+    </header>
 
     <div class="container mx-auto p-4 md:p-8">
-        <header class="mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-cyan-400">Dashboard de Monitoramento de Rede</h1>
-            <p class="text-gray-400 mt-2">Registre e acompanhe as ocorrências da sua infraestrutura de rede.</p>
-        </header>
-
         <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Coluna de Ações (Formulários) -->
-            <div class="lg:col-span-1 space-y-8">
+            <!-- Coluna de Ações (Apenas para utilizadores logados) -->
+            <div id="actions-column" class="lg:col-span-1 space-y-8 hidden">
                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
                     <h2 id="form-title" class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white">Registrar Ocorrência</h2>
                     <form id="report-form" class="space-y-4">
+                        <!-- Conteúdo do formulário -->
                         <input type="hidden" id="report-id">
                         <div>
                             <label for="report-date" class="block text-sm font-medium text-gray-300 mb-1">Data</label>
@@ -36,70 +39,29 @@
                         </div>
                         <div>
                             <label for="location-select" class="block text-sm font-medium text-gray-300 mb-1">Local</label>
-                            <select id="location-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2">
-                                <option>Carregando locais...</option>
-                            </select>
+                            <select id="location-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2"></select>
                         </div>
                         <div>
                             <label for="incident-select" class="block text-sm font-medium text-gray-300 mb-1">Tipo de Incidente</label>
                             <select id="incident-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2"></select>
                         </div>
-                        <div id="custom-description-wrapper" class="hidden">
-                             <label for="report-description" class="block text-sm font-medium text-gray-300 mb-1">Descrição Customizada</label>
-                            <textarea id="report-description" rows="3" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Descreva o incidente..."></textarea>
-                        </div>
                         <div>
-                            <label for="report-comments" class="block text-sm font-medium text-gray-300 mb-1">Comentários (Opcional)</label>
-                            <textarea id="report-comments" rows="3" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Adicione observações..."></textarea>
+                            <label for="report-comments" class="block text-sm font-medium text-gray-300 mb-1">Comentários</label>
+                            <textarea id="report-comments" rows="3" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2"></textarea>
                         </div>
-                        <div>
-                            <label for="report-response-time" class="block text-sm font-medium text-gray-300 mb-1">Tempo de Resposta (Opcional)</label>
-                            <input type="text" id="report-response-time" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Ex: 15 minutos">
-                        </div>
-                        <div>
-                            <label for="report-closure-time" class="block text-sm font-medium text-gray-300 mb-1">Tempo de Fechamento (Opcional)</label>
-                            <input type="text" id="report-closure-time" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Ex: 8 horas">
-                        </div>
-                        <div id="report-form-message" class="text-red-400 text-sm hidden"></div>
-                        <div class="flex gap-2">
-                            <button type="submit" id="save-report-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar Relatório</button>
-                            <button type="button" id="cancel-edit-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hidden">Cancelar Edição</button>
-                        </div>
+                        <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar Relatório</button>
                     </form>
-                </div>
-                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white">Gerenciar Locais</h2>
-                    <form id="location-form" class="flex gap-2 mb-4">
-                        <input type="text" id="location-name" class="flex-grow bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Nome do novo local">
-                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar</button>
-                    </form>
-                    <div id="location-form-message" class="text-red-400 text-sm hidden mb-2"></div>
-                    <div id="locations-list" class="space-y-2"></div>
-                </div>
-                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white">Emissão de Relatórios</h2>
-                    <div class="flex flex-col sm:flex-row gap-4">
-                        <button id="weekly-report-btn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg">Relatório Semanal</button>
-                        <button id="monthly-report-btn" class="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg">Relatório Mensal</button>
-                    </div>
                 </div>
             </div>
 
-            <!-- Coluna de Dashboard e Relatórios -->
-            <div class="lg:col-span-2 space-y-8">
-                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 class="text-2xl font-semibold mb-4 text-white">Dashboard de Incidências por Tipo</h2>
-                    <div class="relative h-80"><canvas id="incident-pie-chart"></canvas></div>
-                </div>
+            <!-- Coluna de Dashboard e Relatórios (Sempre visível) -->
+            <div id="dashboard-column" class="lg:col-span-3 space-y-8">
                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 class="text-2xl font-semibold mb-4 text-white">Dashboard de Incidências por Local</h2>
+                    <h2 class="text-2xl font-semibold text-white mb-4">Dashboard de Incidências por Local</h2>
                     <div id="incidents-chart" class="space-y-4"></div>
                 </div>
                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <div class="flex justify-between items-center mb-4">
-                         <h2 class="text-2xl font-semibold text-white">Relatórios Recentes</h2>
-                         <p class="text-xs text-gray-400">SLA: > 8 horas de fechamento = <span class="text-red-400 font-semibold">Fora do SLA</span></p>
-                    </div>
+                    <h2 class="text-2xl font-semibold text-white mb-4">Relatórios Recentes</h2>
                     <div id="reports-list" class="space-y-4 max-h-96 overflow-y-auto pr-2"></div>
                 </div>
             </div>
@@ -108,30 +70,23 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const API_PREFIX = '/api';
-            
-            // --- Referências aos elementos do DOM ---
-            const connectionStatus = document.getElementById('connection-status');
-            const locationForm = document.getElementById('location-form');
-            const locationNameInput = document.getElementById('location-name');
-            const locationsList = document.getElementById('locations-list');
-            const locationSelect = document.getElementById('location-select');
-            const reportForm = document.getElementById('report-form');
+            // --- Configuração da API ---
+            // AQUI ESTÁ A MUDANÇA: Usamos a URL completa e final da sua aplicação.
+            const API_BASE_URL = 'https://plantaotj.inforgeeklab.com.br';
+
+            const token = localStorage.getItem('authToken');
+            const user = JSON.parse(localStorage.getItem('user'));
+            const isLoggedIn = token && user;
+
+            const actionsColumn = document.getElementById('actions-column');
+            const dashboardColumn = document.getElementById('dashboard-column');
+            const authControls = document.getElementById('auth-controls');
+            const welcomeMessage = document.getElementById('welcome-message');
             const reportsList = document.getElementById('reports-list');
+            const incidentsChart = document.getElementById('incidents-chart');
+            const locationSelect = document.getElementById('location-select');
             const incidentSelect = document.getElementById('incident-select');
-            const customDescriptionWrapper = document.getElementById('custom-description-wrapper');
-            const reportFormMessage = document.getElementById('report-form-message');
-            const incidentsChartEl = document.getElementById('incidents-chart');
-            const formTitle = document.getElementById('form-title');
-            const reportIdInput = document.getElementById('report-id');
-            const saveReportBtn = document.getElementById('save-report-btn');
-            const cancelEditBtn = document.getElementById('cancel-edit-btn');
-
-            let allReportsData = [];
-            let allLocationsData = [];
-            let incidentPieChart;
-            let isConnected = false;
-
+            
             const predefinedIncidents = [
                 "INDISPONIBILIDADE DO LINK PRINCIPAL DE INTERNET", "FALHA NO BACKBONE - OPERADORA PARA O TJAP",
                 "ROMPIMENTO DE FIBRA OPTICA, AFETANDO UMA UNIDADE", "ROMPIMENTO DE FIBRA OPTICA, AFETANDO MAIS DE UMA UNIDADE",
@@ -139,100 +94,44 @@
                 "FALHA NA COMUNICACAO EM RAZAO DE FALTA DE ENERGIA", "LENTIDÃO DO LINK PRINCIPAL DE INTERNET", "Outro"
             ];
 
-            // --- Funções de Comunicação com a API ---
-            async function fetchData(path) {
-                try {
-                    const response = await fetch(path);
-                    if (!response.ok) throw new Error(`Erro de rede: ${response.status}`);
-                    if (!isConnected) {
-                        connectionStatus.textContent = 'Conectado';
-                        connectionStatus.className = 'p-2 text-center text-white font-semibold bg-green-600';
-                        isConnected = true;
-                    }
-                    return await response.json();
-                } catch (error) {
-                    if (!isConnected) {
-                        connectionStatus.textContent = `Falha na Conexão com a API. Verifique o Proxy Reverso.`;
-                        connectionStatus.className = 'p-2 text-center text-white font-semibold bg-red-600';
-                    }
-                    throw error;
-                }
-            }
-
-            async function postData(path, data) {
-                return await fetch(path, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+            // --- Configuração da UI baseada no estado de login ---
+            if (isLoggedIn) {
+                // Modo Autenticado
+                actionsColumn.classList.remove('hidden');
+                dashboardColumn.classList.remove('lg:col-span-3');
+                dashboardColumn.classList.add('lg:col-span-2');
+                welcomeMessage.textContent = `Bem-vindo, ${user.username}! (Papel: ${user.role})`;
+                authControls.innerHTML = `<button id="logout-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Sair</button>`;
+                document.getElementById('logout-btn').addEventListener('click', () => {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('user');
+                    window.location.reload();
                 });
-            }
-            
-            async function putData(path, data) {
-                return await fetch(path, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
+            } else {
+                // Modo Público
+                dashboardColumn.classList.add('lg:col-span-3');
+                authControls.innerHTML = `<a href="/login.html" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Login</a>`;
             }
 
-            async function deleteData(path) {
-                return await fetch(path, { method: 'DELETE' });
+            // --- Funções de Fetch de Dados ---
+            async function fetchPublicReports() {
+                const response = await fetch(`${API_BASE_URL}/api/public/reports`);
+                if (!response.ok) throw new Error('Failed to fetch public reports');
+                return await response.json();
             }
 
-            // --- Funções de Carregamento e Renderização ---
-            async function loadInitialData() {
-                try {
-                    const [locations, reports] = await Promise.all([
-                        fetchData(`${API_PREFIX}/locations`),
-                        fetchData(`${API_PREFIX}/reports`)
-                    ]);
-                    allLocationsData = locations;
-                    allReportsData = reports;
-                    
-                    renderLocations(locations);
-                    updateLocationDropdown(locations);
-                    renderReports(reports);
-                    updateDashboard(reports);
-                    updateIncidentTypeDashboard(reports);
-                } catch (error) {
-                    console.error("Não foi possível carregar os dados iniciais.");
-                }
+            async function fetchPrivateData() {
+                const headers = { 'Authorization': `Bearer ${token}` };
+                const [reportsRes, locationsRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/api/reports`, { headers }),
+                    fetch(`${API_BASE_URL}/api/locations`, { headers })
+                ]);
+                if (!reportsRes.ok || !locationsRes.ok) throw new Error('Failed to fetch private data');
+                return await Promise.all([reportsRes.json(), locationsRes.json()]);
             }
 
-            function renderLocations(locations) {
-                locationsList.innerHTML = '';
-                if (locations.length === 0) {
-                    locationsList.innerHTML = '<p class="text-gray-500 text-sm">Nenhum local cadastrado.</p>';
-                    return;
-                }
-                locations.forEach(location => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center bg-gray-700 p-2 rounded-lg';
-                    div.innerHTML = `
-                        <span class="text-white">${location.name}</span>
-                        <button data-id="${location.id}" class="delete-location-btn text-red-400 hover:text-red-600 text-xs font-bold">EXCLUIR</button>
-                    `;
-                    locationsList.appendChild(div);
-                });
-            }
-            
-            function updateLocationDropdown(locations) {
-                const currentValue = locationSelect.value;
-                locationSelect.innerHTML = '';
-                if (locations.length === 0) {
-                    locationSelect.innerHTML = '<option disabled selected>Cadastre um local</option>';
-                } else {
-                    locations.forEach(location => {
-                        const option = document.createElement('option');
-                        option.value = location.name;
-                        option.textContent = location.name;
-                        locationSelect.appendChild(option);
-                    });
-                    locationSelect.value = currentValue;
-                }
-            }
-            
-            function renderReports(reports) {
+            // --- Funções de Renderização ---
+            function renderReports(reports, isPublic) {
                 reportsList.innerHTML = '';
                 if (reports.length === 0) {
                     reportsList.innerHTML = '<p class="text-gray-500 text-sm">Nenhum relatório registrado.</p>';
@@ -243,123 +142,27 @@
                     div.className = 'bg-gray-700 p-4 rounded-lg';
                     const formattedDate = new Date(report.report_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
                     
-                    div.innerHTML = `
+                    let reportHTML = `
                         <div class="flex justify-between items-start">
-                            <div>
-                                <p class="font-bold text-cyan-400">${report.location}</p>
-                                <p class="text-sm text-gray-400">${formattedDate}</p>
-                            </div>
-                            <div class="flex gap-2">
-                                <button data-id="${report.id}" class="edit-report-btn text-yellow-400 hover:text-yellow-600 text-xs font-bold">EDITAR</button>
-                                <button data-id="${report.id}" class="delete-report-btn text-red-400 hover:text-red-600 text-xs font-bold">EXCLUIR</button>
-                            </div>
+                            <p class="font-bold text-cyan-400">${report.location}</p>
+                            <p class="text-sm text-gray-400">${formattedDate}</p>
                         </div>
                         <p class="mt-2 text-gray-200">${report.description}</p>
-                        ${report.comments ? `<p class="mt-2 text-sm text-gray-300 italic"><strong>Comentário:</strong> ${report.comments}</p>` : ''}
                     `;
+                    
+                    if (!isPublic) {
+                        reportHTML += `${report.comments ? `<p class="mt-2 text-sm text-gray-300 italic"><strong>Comentário:</strong> ${report.comments}</p>` : ''}`;
+                    }
+                    
+                    div.innerHTML = reportHTML;
                     reportsList.appendChild(div);
                 });
             }
-            
-            // --- Lógica de Formulários ---
-            locationForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const name = locationNameInput.value.trim();
-                if (!name) return;
-                await postData(`${API_PREFIX}/locations`, { name });
-                locationNameInput.value = '';
-                loadInitialData();
-            });
 
-            reportForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                let description = incidentSelect.value;
-                if (description === 'Outro') {
-                    description = document.getElementById('report-description').value.trim();
-                }
-
-                const reportData = {
-                    report_date: document.getElementById('report-date').value,
-                    location: locationSelect.value,
-                    description: description,
-                    comments: document.getElementById('report-comments').value.trim(),
-                    response_time: document.getElementById('report-response-time').value.trim(),
-                    closure_time: document.getElementById('report-closure-time').value.trim(),
-                };
-                
-                const reportId = reportIdInput.value;
-
-                if (reportId) { // Editando
-                    await putData(`${API_PREFIX}/reports/${reportId}`, reportData);
-                } else { // Adicionando
-                    await postData(`${API_PREFIX}/reports`, reportData);
-                }
-                
-                cancelEdit();
-                loadInitialData();
-            });
-
-            function startEditReport(id) {
-                const report = allReportsData.find(r => r.id == id);
-                if (!report) return;
-
-                formTitle.textContent = 'Editar Ocorrência';
-                reportIdInput.value = report.id;
-                document.getElementById('report-date').value = new Date(report.report_date).toISOString().split('T')[0];
-                locationSelect.value = report.location;
-                
-                if (predefinedIncidents.includes(report.description)) {
-                    incidentSelect.value = report.description;
-                    customDescriptionWrapper.classList.add('hidden');
-                } else {
-                    incidentSelect.value = 'Outro';
-                    customDescriptionWrapper.classList.remove('hidden');
-                    document.getElementById('report-description').value = report.description;
-                }
-                
-                document.getElementById('report-comments').value = report.comments || '';
-                document.getElementById('report-response-time').value = report.response_time || '';
-                document.getElementById('report-closure-time').value = report.closure_time || '';
-                
-                saveReportBtn.textContent = 'Salvar Alterações';
-                cancelEditBtn.classList.remove('hidden');
-            }
-
-            function cancelEdit() {
-                formTitle.textContent = 'Registrar Ocorrência';
-                reportForm.reset();
-                setDefaultDate();
-                reportIdInput.value = '';
-                saveReportBtn.textContent = 'Adicionar Relatório';
-                cancelEditBtn.classList.add('hidden');
-                customDescriptionWrapper.classList.add('hidden');
-            }
-
-            // --- Delegação de Eventos ---
-            document.body.addEventListener('click', async (e) => {
-                const target = e.target;
-                if (target.classList.contains('delete-location-btn')) {
-                    if (confirm('Tem certeza que deseja excluir este local?')) {
-                        await deleteData(`${API_PREFIX}/locations/${target.dataset.id}`);
-                        loadInitialData();
-                    }
-                }
-                if (target.classList.contains('delete-report-btn')) {
-                     if (confirm('Tem certeza que deseja excluir este relatório?')) {
-                        await deleteData(`${API_PREFIX}/reports/${target.dataset.id}`);
-                        loadInitialData();
-                    }
-                }
-                if (target.classList.contains('edit-report-btn')) {
-                    startEditReport(target.dataset.id);
-                }
-            });
-
-            // --- Funções do Dashboard ---
             function updateDashboard(reports) {
-                incidentsChartEl.innerHTML = '';
+                incidentsChart.innerHTML = '';
                 if (reports.length === 0) {
-                    incidentsChartEl.innerHTML = '<p class="text-gray-500 text-sm">Sem dados para exibir.</p>';
+                    incidentsChart.innerHTML = '<p class="text-gray-500 text-sm">Sem dados para exibir.</p>';
                     return;
                 }
                 const incidentsByLocation = reports.reduce((acc, report) => {
@@ -370,34 +173,22 @@
                 Object.entries(incidentsByLocation).forEach(([location, count]) => {
                     const barElement = document.createElement('div');
                     barElement.innerHTML = `<div class="flex justify-between items-center"><span class="text-sm">${location}</span><span class="text-sm font-bold">${count}</span></div>`;
-                    incidentsChartEl.appendChild(barElement);
-                });
-            }
-
-            function updateIncidentTypeDashboard(reports) {
-                const ctx = document.getElementById('incident-pie-chart').getContext('2d');
-                if (!ctx) return;
-                
-                const incidentsByType = reports.reduce((acc, report) => {
-                    acc[report.description] = (acc[report.description] || 0) + 1;
-                    return acc;
-                }, {});
-
-                if (window.incidentPieChart) window.incidentPieChart.destroy();
-                
-                window.incidentPieChart = new Chart(ctx, {
-                    type: 'pie',
-                    data: {
-                        labels: Object.keys(incidentsByType),
-                        datasets: [{ data: Object.values(incidentsByType), backgroundColor: ['#22d3ee', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444', '#10b981', '#6366f1'] }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#d1d5db' } } } }
+                    incidentsChart.appendChild(barElement);
                 });
             }
             
-            // --- Inicialização ---
-            function setDefaultDate() {
-                document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
+            function updateLocationDropdown(locations) {
+                locationSelect.innerHTML = '';
+                 if (locations.length === 0) {
+                    locationSelect.innerHTML = '<option disabled selected>Cadastre um local</option>';
+                } else {
+                    locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location.name;
+                        option.textContent = location.name;
+                        locationSelect.appendChild(option);
+                    });
+                }
             }
             
             function populateIncidentSelect() {
@@ -409,14 +200,28 @@
                 });
             }
 
-            incidentSelect.addEventListener('change', (e) => {
-                customDescriptionWrapper.classList.toggle('hidden', e.target.value !== 'Outro');
-            });
-            
-            cancelEditBtn.addEventListener('click', cancelEdit);
-            setDefaultDate();
-            populateIncidentSelect();
-            loadInitialData();
+            // --- Inicialização ---
+            async function initialize() {
+                try {
+                    if (isLoggedIn) {
+                        const [reports, locations] = await fetchPrivateData();
+                        renderReports(reports, false);
+                        updateDashboard(reports);
+                        updateLocationDropdown(locations);
+                        populateIncidentSelect();
+                    } else {
+                        const reports = await fetchPublicReports();
+                        renderReports(reports, true);
+                        updateDashboard(reports);
+                    }
+                } catch(err) {
+                    console.error("Falha ao inicializar os dados:", err);
+                    document.getElementById('welcome-message').textContent = "Erro de conexão com a API.";
+                    document.getElementById('welcome-message').classList.add('text-red-500');
+                }
+            }
+
+            initialize();
         });
     </script>
 </body>

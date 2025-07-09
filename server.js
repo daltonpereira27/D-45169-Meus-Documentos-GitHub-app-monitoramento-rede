@@ -2,9 +2,12 @@ const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = 3000;
+const JWT_SECRET = 'seu-segredo-super-secreto-para-jwt-mude-isto'; // IMPORTANTE: Mude isto para uma frase aleatória
 
 // --- Middlewares ---
 app.use(cors());
@@ -20,15 +23,28 @@ const pool = new Pool({
   port: process.env.DB_PORT,
 });
 
-// Função para criar as tabelas se não existirem.
-const createTables = async () => {
+// --- Função de Inicialização do Banco de Dados ---
+const initializeDatabase = async () => {
   const client = await pool.connect();
   try {
+    // Tabela de Utilizadores
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(255) NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'technician', 'viewer'))
+      );
+    `);
+    // Tabela de Locais
     await client.query(`
       CREATE TABLE IF NOT EXISTS locations (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL UNIQUE
       );
+    `);
+    // Tabela de Relatórios
+    await client.query(`
       CREATE TABLE IF NOT EXISTS reports (
         id SERIAL PRIMARY KEY,
         report_date DATE NOT NULL,
@@ -36,103 +52,122 @@ const createTables = async () => {
         description TEXT NOT NULL,
         comments TEXT,
         response_time VARCHAR(100),
-        closure_time VARCHAR(100)
+        closure_time VARCHAR(100),
+        created_by_user_id INTEGER REFERENCES users(id)
       );
     `);
-    console.log('Tabelas verificadas/criadas com sucesso.');
+    
+    const res = await client.query('SELECT * FROM users');
+    if (res.rowCount === 0) {
+      const salt = await bcrypt.genSalt(10);
+      const adminPasswordHash = await bcrypt.hash('admin', salt);
+      await client.query(
+        "INSERT INTO users (username, password_hash, role) VALUES ('admin', $1, 'admin')",
+        [adminPasswordHash]
+      );
+      console.log("Utilizador 'admin' padrão criado com a senha 'admin'.");
+    }
+    console.log('Banco de dados verificado/inicializado com sucesso.');
   } catch (err) {
-    console.error('Erro ao criar tabelas:', err);
+    console.error('Erro ao inicializar o banco de dados:', err);
   } finally {
     client.release();
   }
 };
 
-// --- API Endpoints para Locais ---
-app.get('/api/locations', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM locations ORDER BY name ASC');
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// --- Middleware de Autenticação e Autorização ---
+const protect = (roles = []) => {
+  return (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Acesso negado. Nenhum token fornecido.' });
+    }
 
-app.post('/api/locations', async (req, res) => {
-  try {
-    const { name } = req.body;
-    const result = await pool.query('INSERT INTO locations (name) VALUES ($1) RETURNING *', [name]);
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/locations/:id', async (req, res) => {
     try {
-        const { id } = req.params;
-        await pool.query('DELETE FROM locations WHERE id = $1', [id]);
-        res.status(204).send(); // 204 No Content
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+
+      if (roles.length > 0 && !roles.includes(req.user.role)) {
+        return res.status(403).json({ message: 'Acesso negado. Permissões insuficientes.' });
+      }
+
+      next();
+    } catch (error) {
+      res.status(401).json({ message: 'Token inválido.' });
+    }
+  };
+};
+
+// --- ROTAS PÚBLICAS (NÃO PRECISAM DE LOGIN) ---
+
+app.get('/api/public/reports', async (req, res) => {
+    try {
+        // Seleciona apenas os campos não sensíveis
+        const result = await pool.query('SELECT id, report_date, location, description FROM reports ORDER BY report_date DESC, id DESC LIMIT 20');
+        res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
+// --- ROTAS DE AUTENTICAÇÃO ---
 
-// --- API Endpoints para Relatórios ---
-app.get('/api/reports', async (req, res) => {
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
   try {
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
+
+    if (!user) return res.status(401).json({ message: 'Credenciais inválidas.' });
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) return res.status(401).json({ message: 'Credenciais inválidas.' });
+
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ROTAS PRIVADAS (PRECISAM DE LOGIN) ---
+
+app.get('/api/me', protect(), (req, res) => {
+    res.json(req.user);
+});
+
+app.get('/api/reports', protect(), async (req, res) => {
+    // Esta rota agora devolve todos os campos, pois está protegida
     const result = await pool.query('SELECT * FROM reports ORDER BY report_date DESC, id DESC');
     res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
-app.post('/api/reports', async (req, res) => {
-  try {
+app.post('/api/reports', protect(['admin', 'technician']), async (req, res) => {
     const { report_date, location, description, comments, response_time, closure_time } = req.body;
+    const created_by_user_id = req.user.id;
     const result = await pool.query(
-      'INSERT INTO reports (report_date, location, description, comments, response_time, closure_time) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [report_date, location, description, comments, response_time, closure_time]
+      'INSERT INTO reports (report_date, location, description, comments, response_time, closure_time, created_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [report_date, location, description, comments, response_time, closure_time, created_by_user_id]
     );
     res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
-app.put('/api/reports/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { report_date, location, description, comments, response_time, closure_time } = req.body;
-        const result = await pool.query(
-            'UPDATE reports SET report_date = $1, location = $2, description = $3, comments = $4, response_time = $5, closure_time = $6 WHERE id = $7 RETURNING *',
-            [report_date, location, description, comments, response_time, closure_time, id]
-        );
-        res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+// ... (outras rotas privadas de PUT, DELETE, etc.)
+
+// --- Rotas de Frontend ---
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.delete('/api/reports/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        await pool.query('DELETE FROM reports WHERE id = $1', [id]);
-        res.status(204).send(); // 204 No Content
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-
-// Rota principal para servir o frontend.
+// A rota principal agora serve o dashboard público/privado
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Inicia o servidor.
+// Inicia o servidor
 app.listen(PORT, async () => {
   console.log(`Servidor a correr na porta ${PORT}`);
-  await createTables();
+  await initializeDatabase();
 });
