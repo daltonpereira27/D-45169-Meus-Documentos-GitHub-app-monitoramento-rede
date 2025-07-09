@@ -3,225 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Monitoramento de Rede</title>
+    <title>Login - Dashboard de Monitoramento</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Inter', sans-serif; } </style>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
 </head>
-<body class="bg-gray-900 text-gray-100">
-
-    <!-- Cabeçalho Dinâmico -->
-    <header class="bg-gray-800 p-4 shadow-md sticky top-0 z-10">
-        <div class="container mx-auto flex justify-between items-center">
+<body class="bg-gray-900 flex items-center justify-center h-screen">
+    <div class="w-full max-w-md bg-gray-800 p-8 rounded-xl shadow-lg">
+        <h1 class="text-3xl font-bold text-center text-cyan-400 mb-6">Login</h1>
+        <form id="login-form" class="space-y-6">
             <div>
-                <h1 class="text-xl font-bold text-cyan-400">Dashboard de Monitoramento</h1>
-                <p id="welcome-message" class="text-sm text-gray-400">Visão Pública</p>
+                <label for="username" class="block text-sm font-medium text-gray-300">Utilizador</label>
+                <input type="text" id="username" name="username" required class="mt-1 block w-full bg-gray-700 border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-cyan-500">
             </div>
-            <div id="auth-controls">
-                <!-- Botões de Login/Logout aparecerão aqui -->
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-300">Senha</label>
+                <input type="password" id="password" name="password" required class="mt-1 block w-full bg-gray-700 border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-cyan-500">
             </div>
-        </div>
-    </header>
-
-    <div class="container mx-auto p-4 md:p-8">
-        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Coluna de Ações (Apenas para utilizadores logados) -->
-            <div id="actions-column" class="lg:col-span-1 space-y-8 hidden">
-                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 id="form-title" class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white">Registrar Ocorrência</h2>
-                    <form id="report-form" class="space-y-4">
-                        <!-- Conteúdo do formulário -->
-                        <input type="hidden" id="report-id">
-                        <div>
-                            <label for="report-date" class="block text-sm font-medium text-gray-300 mb-1">Data</label>
-                            <input type="date" id="report-date" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2">
-                        </div>
-                        <div>
-                            <label for="location-select" class="block text-sm font-medium text-gray-300 mb-1">Local</label>
-                            <select id="location-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2"></select>
-                        </div>
-                        <div>
-                            <label for="incident-select" class="block text-sm font-medium text-gray-300 mb-1">Tipo de Incidente</label>
-                            <select id="incident-select" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2"></select>
-                        </div>
-                        <div>
-                            <label for="report-comments" class="block text-sm font-medium text-gray-300 mb-1">Comentários</label>
-                            <textarea id="report-comments" rows="3" class="w-full bg-gray-700 border-gray-600 text-white rounded-lg p-2"></textarea>
-                        </div>
-                        <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar Relatório</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Coluna de Dashboard e Relatórios (Sempre visível) -->
-            <div id="dashboard-column" class="lg:col-span-3 space-y-8">
-                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 class="text-2xl font-semibold text-white mb-4">Dashboard de Incidências por Local</h2>
-                    <div id="incidents-chart" class="space-y-4"></div>
-                </div>
-                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <h2 class="text-2xl font-semibold text-white mb-4">Relatórios Recentes</h2>
-                    <div id="reports-list" class="space-y-4 max-h-96 overflow-y-auto pr-2"></div>
-                </div>
-            </div>
-        </main>
+            <div id="error-message" class="text-red-400 text-sm text-center hidden"></div>
+            <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">Entrar</button>
+        </form>
+        <p class="text-xs text-gray-500 text-center mt-4">Utilizador padrão: admin / Senha: admin</p>
     </div>
-    
+
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- Configuração da API ---
-            // AQUI ESTÁ A MUDANÇA: Usamos a URL completa e final da sua aplicação.
-            const API_BASE_URL = 'https://plantaotj.inforgeeklab.com.br';
-
-            const token = localStorage.getItem('authToken');
-            const user = JSON.parse(localStorage.getItem('user'));
-            const isLoggedIn = token && user;
-
-            const actionsColumn = document.getElementById('actions-column');
-            const dashboardColumn = document.getElementById('dashboard-column');
-            const authControls = document.getElementById('auth-controls');
-            const welcomeMessage = document.getElementById('welcome-message');
-            const reportsList = document.getElementById('reports-list');
-            const incidentsChart = document.getElementById('incidents-chart');
-            const locationSelect = document.getElementById('location-select');
-            const incidentSelect = document.getElementById('incident-select');
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('error-message');
             
-            const predefinedIncidents = [
-                "INDISPONIBILIDADE DO LINK PRINCIPAL DE INTERNET", "FALHA NO BACKBONE - OPERADORA PARA O TJAP",
-                "ROMPIMENTO DE FIBRA OPTICA, AFETANDO UMA UNIDADE", "ROMPIMENTO DE FIBRA OPTICA, AFETANDO MAIS DE UMA UNIDADE",
-                "FALHA NA COMUNICAÇÃO EM RAZAO DE TRAVAMENTO OU QUEIMA DE EQUIPAMENTOS TJAP",
-                "FALHA NA COMUNICACAO EM RAZAO DE FALTA DE ENERGIA", "LENTIDÃO DO LINK PRINCIPAL DE INTERNET", "Outro"
-            ];
-
-            // --- Configuração da UI baseada no estado de login ---
-            if (isLoggedIn) {
-                // Modo Autenticado
-                actionsColumn.classList.remove('hidden');
-                dashboardColumn.classList.remove('lg:col-span-3');
-                dashboardColumn.classList.add('lg:col-span-2');
-                welcomeMessage.textContent = `Bem-vindo, ${user.username}! (Papel: ${user.role})`;
-                authControls.innerHTML = `<button id="logout-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Sair</button>`;
-                document.getElementById('logout-btn').addEventListener('click', () => {
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('user');
-                    window.location.reload();
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
                 });
-            } else {
-                // Modo Público
-                dashboardColumn.classList.add('lg:col-span-3');
-                authControls.innerHTML = `<a href="/login.html" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Login</a>`;
-            }
 
-            // --- Funções de Fetch de Dados ---
-            async function fetchPublicReports() {
-                const response = await fetch(`${API_BASE_URL}/api/public/reports`);
-                if (!response.ok) throw new Error('Failed to fetch public reports');
-                return await response.json();
-            }
-
-            async function fetchPrivateData() {
-                const headers = { 'Authorization': `Bearer ${token}` };
-                const [reportsRes, locationsRes] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/reports`, { headers }),
-                    fetch(`${API_BASE_URL}/api/locations`, { headers })
-                ]);
-                if (!reportsRes.ok || !locationsRes.ok) throw new Error('Failed to fetch private data');
-                return await Promise.all([reportsRes.json(), locationsRes.json()]);
-            }
-
-            // --- Funções de Renderização ---
-            function renderReports(reports, isPublic) {
-                reportsList.innerHTML = '';
-                if (reports.length === 0) {
-                    reportsList.innerHTML = '<p class="text-gray-500 text-sm">Nenhum relatório registrado.</p>';
-                    return;
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Credenciais inválidas.');
                 }
-                reports.forEach(report => {
-                    const div = document.createElement('div');
-                    div.className = 'bg-gray-700 p-4 rounded-lg';
-                    const formattedDate = new Date(report.report_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                    
-                    let reportHTML = `
-                        <div class="flex justify-between items-start">
-                            <p class="font-bold text-cyan-400">${report.location}</p>
-                            <p class="text-sm text-gray-400">${formattedDate}</p>
-                        </div>
-                        <p class="mt-2 text-gray-200">${report.description}</p>
-                    `;
-                    
-                    if (!isPublic) {
-                        reportHTML += `${report.comments ? `<p class="mt-2 text-sm text-gray-300 italic"><strong>Comentário:</strong> ${report.comments}</p>` : ''}`;
-                    }
-                    
-                    div.innerHTML = reportHTML;
-                    reportsList.appendChild(div);
-                });
-            }
 
-            function updateDashboard(reports) {
-                incidentsChart.innerHTML = '';
-                if (reports.length === 0) {
-                    incidentsChart.innerHTML = '<p class="text-gray-500 text-sm">Sem dados para exibir.</p>';
-                    return;
-                }
-                const incidentsByLocation = reports.reduce((acc, report) => {
-                    acc[report.location] = (acc[report.location] || 0) + 1;
-                    return acc;
-                }, {});
+                // AQUI ESTÁ A CORREÇÃO: Agora guardamos o token E as informações do utilizador.
+                const { token, user } = await response.json();
+                localStorage.setItem('authToken', token);
+                localStorage.setItem('user', JSON.stringify(user)); // Guarda o objeto do utilizador
                 
-                Object.entries(incidentsByLocation).forEach(([location, count]) => {
-                    const barElement = document.createElement('div');
-                    barElement.innerHTML = `<div class="flex justify-between items-center"><span class="text-sm">${location}</span><span class="text-sm font-bold">${count}</span></div>`;
-                    incidentsChart.appendChild(barElement);
-                });
-            }
-            
-            function updateLocationDropdown(locations) {
-                locationSelect.innerHTML = '';
-                 if (locations.length === 0) {
-                    locationSelect.innerHTML = '<option disabled selected>Cadastre um local</option>';
-                } else {
-                    locations.forEach(location => {
-                        const option = document.createElement('option');
-                        option.value = location.name;
-                        option.textContent = location.name;
-                        locationSelect.appendChild(option);
-                    });
-                }
-            }
-            
-            function populateIncidentSelect() {
-                predefinedIncidents.forEach(incident => {
-                    const option = document.createElement('option');
-                    option.value = incident;
-                    option.textContent = incident;
-                    incidentSelect.appendChild(option);
-                });
-            }
+                window.location.href = '/'; // Redireciona para o dashboard principal
 
-            // --- Inicialização ---
-            async function initialize() {
-                try {
-                    if (isLoggedIn) {
-                        const [reports, locations] = await fetchPrivateData();
-                        renderReports(reports, false);
-                        updateDashboard(reports);
-                        updateLocationDropdown(locations);
-                        populateIncidentSelect();
-                    } else {
-                        const reports = await fetchPublicReports();
-                        renderReports(reports, true);
-                        updateDashboard(reports);
-                    }
-                } catch(err) {
-                    console.error("Falha ao inicializar os dados:", err);
-                    document.getElementById('welcome-message').textContent = "Erro de conexão com a API.";
-                    document.getElementById('welcome-message').classList.add('text-red-500');
-                }
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                errorMessage.classList.remove('hidden');
             }
-
-            initialize();
         });
     </script>
 </body>

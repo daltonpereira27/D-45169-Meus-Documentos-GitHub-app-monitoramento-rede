@@ -1,7 +1,7 @@
 {
   "name": "network-monitoring-backend",
-  "version": "1.0.0",
-  "description": "Backend for the network monitoring app",
+  "version": "2.0.0",
+  "description": "Backend for the network monitoring app with authentication",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,6 +9,8 @@
   "dependencies": {
     "express": "^4.19.2",
     "pg": "^8.11.5",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
   }
 }
