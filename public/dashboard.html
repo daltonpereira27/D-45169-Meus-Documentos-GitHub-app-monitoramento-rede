@@ -56,6 +56,16 @@
                         <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar Relatório</button>
                     </form>
                 </div>
+                <!-- Gerenciamento de Locais -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">Gerenciar Locais</h2>
+                    <form id="location-form" class="flex gap-2 mb-4">
+                        <input type="text" id="location-name" class="flex-grow bg-gray-700 border-gray-600 text-white rounded-lg p-2" placeholder="Nome do novo local">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Adicionar</button>
+                    </form>
+                    <div id="locations-list" class="space-y-2"></div>
+                </div>
+                <!-- Emissão de Relatórios -->
                 <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
                     <h2 class="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">Emissão de Relatórios</h2>
                     <div class="flex flex-col sm:flex-row gap-4">
@@ -93,7 +103,14 @@
             const locationSelect = document.getElementById('location-select');
             const incidentSelect = document.getElementById('incident-select');
             const reportForm = document.getElementById('report-form');
+            const locationForm = document.getElementById('location-form');
+            const locationNameInput = document.getElementById('location-name');
+            const locationsList = document.getElementById('locations-list');
+            const weeklyReportBtn = document.getElementById('weekly-report-btn');
+            const monthlyReportBtn = document.getElementById('monthly-report-btn');
 
+            let allReportsData = []; // Cache para relatórios
+            
             const predefinedIncidents = [
                 "INDISPONIBILIDADE DO LINK PRINCIPAL DE INTERNET", "FALHA NO BACKBONE - OPERADORA PARA O TJAP",
                 "ROMPIMENTO DE FIBRA OPTICA, AFETANDO UMA UNIDADE", "ROMPIMENTO DE FIBRA OPTICA, AFETANDO MAIS DE UMA UNIDADE",
@@ -123,7 +140,6 @@
                     return await Promise.all([reportsRes.json(), locationsRes.json()]);
                 } catch (error) {
                     console.error(error);
-                    // Se houver erro (ex: token expirado), redireciona para o login
                     localStorage.removeItem('authToken');
                     localStorage.removeItem('user');
                     window.location.href = '/login.html';
@@ -150,6 +166,23 @@
                         ${report.comments ? `<p class="mt-2 text-sm text-gray-300 italic"><strong>Comentário:</strong> ${report.comments}</p>` : ''}
                     `;
                     reportsList.appendChild(div);
+                });
+            }
+
+            function renderLocations(locations) {
+                locationsList.innerHTML = '';
+                if (!locations || locations.length === 0) {
+                    locationsList.innerHTML = '<p class="text-gray-500 text-sm">Nenhum local cadastrado.</p>';
+                    return;
+                }
+                locations.forEach(location => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center bg-gray-700 p-2 rounded-lg';
+                    div.innerHTML = `
+                        <span class="text-white">${location.name}</span>
+                        <button data-id="${location.id}" class="delete-location-btn text-red-400 hover:text-red-600 text-xs font-bold">EXCLUIR</button>
+                    `;
+                    locationsList.appendChild(div);
                 });
             }
 
@@ -192,10 +225,10 @@
                     option.value = incident;
                     option.textContent = incident;
                     incidentSelect.appendChild(option);
-});
+                });
             }
 
-            // --- Lógica do Formulário ---
+            // --- Lógica dos Formulários ---
             reportForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const reportData = {
@@ -208,25 +241,122 @@
                 try {
                     const response = await fetch('/api/reports', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify(reportData)
                     });
                     if (!response.ok) throw new Error('Falha ao criar relatório.');
                     reportForm.reset();
-                    initialize(); // Recarrega todos os dados
+                    initialize();
                 } catch (error) {
                     console.error(error);
                     alert('Erro ao salvar relatório.');
                 }
             });
 
+            locationForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = locationNameInput.value.trim();
+                if (!name) return;
+                try {
+                    const response = await fetch('/api/locations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ name })
+                    });
+                    if (!response.ok) throw new Error('Falha ao adicionar local.');
+                    locationNameInput.value = '';
+                    initialize();
+                } catch (error) {
+                    console.error(error);
+                    alert('Erro ao salvar local.');
+                }
+            });
+
+            // --- Delegação de Eventos para Exclusão ---
+            locationsList.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('delete-location-btn')) {
+                    const locationId = e.target.dataset.id;
+                    if (confirm('Tem certeza que deseja excluir este local?')) {
+                        try {
+                            const response = await fetch(`/api/locations/${locationId}`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (!response.ok) throw new Error('Falha ao excluir local.');
+                            initialize();
+                        } catch (error) {
+                            console.error(error);
+                            alert('Erro ao excluir local.');
+                        }
+                    }
+                }
+            });
+
+            // --- Lógica de Geração de Relatórios ---
+            function generateReport(period) {
+                const now = new Date();
+                let startDate;
+                let reportTitle = '';
+
+                if (period === 'weekly') {
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+                    reportTitle = 'Relatório Semanal de Incidentes';
+                } else { // monthly
+                    startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                    reportTitle = 'Relatório Mensal de Incidentes';
+                }
+
+                const filteredReports = allReportsData.filter(report => {
+                    const reportDate = new Date(report.report_date);
+                    return reportDate >= startDate && reportDate <= now;
+                });
+
+                let reportHTML = `
+                    <html>
+                    <head>
+                        <title>${reportTitle}</title>
+                        <script src="https://cdn.tailwindcss.com"><\/script>
+                        <style> @media print { .no-print { display: none; } } </style>
+                    </head>
+                    <body class="bg-gray-100 font-sans p-8">
+                        <div class="max-w-4xl mx-auto bg-white p-10 rounded-lg shadow-lg">
+                            <h1 class="text-3xl font-bold text-gray-800 mb-4">${reportTitle}</h1>
+                            <p class="text-gray-500 mb-8">Período: ${startDate.toLocaleDateString('pt-BR')} - ${now.toLocaleDateString('pt-BR')}</p>
+                            <div class="space-y-4">
+                `;
+
+                if (filteredReports.length > 0) {
+                    filteredReports.forEach(report => {
+                        const formattedDate = new Date(report.report_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                        reportHTML += `
+                            <div class="bg-gray-50 p-4 rounded-lg border">
+                                <p><strong class="font-semibold">Data:</strong> ${formattedDate}</p>
+                                <p><strong class="font-semibold">Local:</strong> ${report.location}</p>
+                                <p><strong class="font-semibold">Incidente:</strong> ${report.description}</p>
+                                ${report.comments ? `<p><strong class="font-semibold">Comentários:</strong> ${report.comments}</p>` : ''}
+                            </div>
+                        `;
+                    });
+                } else {
+                    reportHTML += '<p class="text-gray-500">Nenhum incidente registrado neste período.</p>';
+                }
+
+                reportHTML += `</div></div></body></html>`;
+
+                const reportWindow = window.open('', '_blank');
+                reportWindow.document.write(reportHTML);
+                reportWindow.document.close();
+            }
+
+            weeklyReportBtn.addEventListener('click', () => generateReport('weekly'));
+            monthlyReportBtn.addEventListener('click', () => generateReport('monthly'));
+
             // --- Inicialização da Página ---
             async function initialize() {
                 const [reports, locations] = await fetchPrivateData();
+                allReportsData = reports; // Armazena os relatórios para geração de PDF
                 renderReports(reports);
+                renderLocations(locations);
                 updateDashboard(reports);
                 updateLocationDropdown(locations);
                 populateIncidentSelect();
