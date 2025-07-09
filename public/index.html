@@ -3,75 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Dashboard de Monitoramento</title>
+    <title>Status - Monitoramento de Rede</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+    <style> body { font-family: 'Inter', sans-serif; } </style>
 </head>
-<body class="bg-gray-900 flex items-center justify-center h-screen">
-    <div class="w-full max-w-md bg-gray-800 p-8 rounded-xl shadow-lg">
-        <h1 class="text-3xl font-bold text-center text-cyan-400 mb-6">Login</h1>
-        <form id="login-form" class="space-y-6">
-            <div>
-                <label for="username" class="block text-sm font-medium text-gray-300">Utilizador</label>
-                <input type="text" id="username" name="username" required class="mt-1 block w-full bg-gray-700 border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-cyan-500">
+<body class="bg-gray-900 text-gray-100">
+
+    <header class="bg-gray-800 p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-cyan-400">Status dos Serviços</h1>
+            <a href="/login.html" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Login de Administrador</a>
+        </div>
+    </header>
+
+    <div class="container mx-auto p-4 md:p-8">
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+            <h2 class="text-2xl font-semibold text-white mb-4">Relatórios Recentes</h2>
+            <div id="reports-list" class="space-y-4">
+                <p class="text-gray-400">A carregar...</p>
             </div>
-            <div>
-                <label for="password" class="block text-sm font-medium text-gray-300">Senha</label>
-                <input type="password" id="password" name="password" required class="mt-1 block w-full bg-gray-700 border-gray-600 text-white rounded-lg p-3 focus:ring-2 focus:ring-cyan-500">
-            </div>
-            <div id="error-message" class="text-red-400 text-sm text-center hidden"></div>
-            <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">Entrar</button>
-        </form>
-        <p class="text-xs text-gray-500 text-center mt-4">Utilizador padrão: admin / Senha: admin</p>
+        </div>
     </div>
-
+    
     <script>
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorMessage = document.getElementById('error-message');
-            const submitButton = e.target.querySelector('button[type="submit"]');
-            
-            submitButton.disabled = true;
-            submitButton.textContent = 'Autenticando...';
-            errorMessage.classList.add('hidden');
-
+        document.addEventListener('DOMContentLoaded', async () => {
+            const reportsList = document.getElementById('reports-list');
             try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Credenciais inválidas.');
+                const response = await fetch('/api/public/reports');
+                const reports = await response.json();
+                reportsList.innerHTML = '';
+                if (reports.length === 0) {
+                    reportsList.innerHTML = '<p class="text-gray-500">Nenhum incidente recente a reportar.</p>';
+                } else {
+                    reports.forEach(report => {
+                        const div = document.createElement('div');
+                        div.className = 'bg-gray-700 p-4 rounded-lg';
+                        const formattedDate = new Date(report.report_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                        div.innerHTML = `
+                            <div class="flex justify-between items-start">
+                                <p class="font-bold text-cyan-400">${report.location}</p>
+                                <p class="text-sm text-gray-400">${formattedDate}</p>
+                            </div>
+                            <p class="mt-2 text-gray-200">${report.description}</p>
+                        `;
+                        reportsList.appendChild(div);
+                    });
                 }
-
-                submitButton.classList.remove('bg-cyan-600', 'hover:bg-cyan-700');
-                submitButton.classList.add('bg-green-600');
-                submitButton.textContent = 'Sucesso! Redirecionando...';
-
-                const { token, user } = await response.json();
-
-                localStorage.setItem('authToken', token);
-                localStorage.setItem('user', JSON.stringify(user));
-
-                setTimeout(() => {
-                    // Usar .assign() para forçar um recarregamento da página a partir do servidor
-                    window.location.assign('/');
-                }, 1500);
-
             } catch (error) {
-                errorMessage.textContent = error.message;
-                errorMessage.classList.remove('hidden');
-                
-                submitButton.disabled = false;
-                submitButton.textContent = 'Entrar';
+                reportsList.innerHTML = '<p class="text-red-500">Não foi possível carregar os relatórios.</p>';
             }
         });
     </script>

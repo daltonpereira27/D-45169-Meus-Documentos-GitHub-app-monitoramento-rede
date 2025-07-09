@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = 3000;
-const JWT_SECRET = 'seu-segredo-super-secreto-para-jwt-mude-isto'; // IMPORTANTE: Mude isto para uma frase aleatória
+const JWT_SECRET = 'seu-segredo-super-secreto-para-jwt-mude-isto';
 
 // --- Middlewares ---
 app.use(cors());
@@ -27,7 +27,6 @@ const pool = new Pool({
 const initializeDatabase = async () => {
   const client = await pool.connect();
   try {
-    // Tabela de Utilizadores
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -36,14 +35,12 @@ const initializeDatabase = async () => {
         role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'technician', 'viewer'))
       );
     `);
-    // Tabela de Locais
     await client.query(`
       CREATE TABLE IF NOT EXISTS locations (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL UNIQUE
       );
     `);
-    // Tabela de Relatórios
     await client.query(`
       CREATE TABLE IF NOT EXISTS reports (
         id SERIAL PRIMARY KEY,
@@ -82,16 +79,13 @@ const protect = (roles = []) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: 'Acesso negado. Nenhum token fornecido.' });
     }
-
     try {
       const token = authHeader.split(' ')[1];
       const decoded = jwt.verify(token, JWT_SECRET);
       req.user = decoded;
-
       if (roles.length > 0 && !roles.includes(req.user.role)) {
         return res.status(403).json({ message: 'Acesso negado. Permissões insuficientes.' });
       }
-
       next();
     } catch (error) {
       res.status(401).json({ message: 'Token inválido.' });
@@ -99,71 +93,52 @@ const protect = (roles = []) => {
   };
 };
 
-// --- ROTAS PÚBLICAS (NÃO PRECISAM DE LOGIN) ---
-
+// --- ROTAS PÚBLICAS ---
 app.get('/api/public/reports', async (req, res) => {
-    try {
-        // Seleciona apenas os campos não sensíveis
-        const result = await pool.query('SELECT id, report_date, location, description FROM reports ORDER BY report_date DESC, id DESC LIMIT 20');
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// --- ROTAS DE AUTENTICAÇÃO ---
-
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    const user = result.rows[0];
-
-    if (!user) return res.status(401).json({ message: 'Credenciais inválidas.' });
-
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) return res.status(401).json({ message: 'Credenciais inválidas.' });
-
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
-    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// --- ROTAS PRIVADAS (PRECISAM DE LOGIN) ---
-
-app.get('/api/me', protect(), (req, res) => {
-    res.json(req.user);
-});
-
-app.get('/api/reports', protect(), async (req, res) => {
-    // Esta rota agora devolve todos os campos, pois está protegida
-    const result = await pool.query('SELECT * FROM reports ORDER BY report_date DESC, id DESC');
+    const result = await pool.query('SELECT id, report_date, location, description FROM reports ORDER BY report_date DESC, id DESC LIMIT 20');
     res.json(result.rows);
 });
 
+// --- ROTAS DE AUTENTICAÇÃO ---
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+  const user = result.rows[0];
+  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    return res.status(401).json({ message: 'Credenciais inválidas.' });
+  }
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+  res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+});
+
+// --- ROTAS PRIVADAS ---
+app.get('/api/reports', protect(), async (req, res) => {
+    const result = await pool.query('SELECT * FROM reports ORDER BY report_date DESC, id DESC');
+    res.json(result.rows);
+});
+app.get('/api/locations', protect(), async (req, res) => {
+    const result = await pool.query('SELECT * FROM locations ORDER BY name ASC');
+    res.json(result.rows);
+});
 app.post('/api/reports', protect(['admin', 'technician']), async (req, res) => {
-    const { report_date, location, description, comments, response_time, closure_time } = req.body;
-    const created_by_user_id = req.user.id;
+    const { report_date, location, description, comments } = req.body;
     const result = await pool.query(
-      'INSERT INTO reports (report_date, location, description, comments, response_time, closure_time, created_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [report_date, location, description, comments, response_time, closure_time, created_by_user_id]
+      'INSERT INTO reports (report_date, location, description, comments, created_by_user_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [report_date, location, description, comments, req.user.id]
     );
     res.status(201).json(result.rows[0]);
 });
 
-// ... (outras rotas privadas de PUT, DELETE, etc.)
-
 // --- Rotas de Frontend ---
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
-
-// A rota principal agora serve o dashboard público/privado
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// AQUI ESTÁ A MUDANÇA: Nova rota para o dashboard privado
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
 // Inicia o servidor
