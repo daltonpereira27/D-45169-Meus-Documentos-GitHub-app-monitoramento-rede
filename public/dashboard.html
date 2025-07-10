@@ -95,6 +95,7 @@
             const user = JSON.parse(localStorage.getItem('user'));
             const token = localStorage.getItem('authToken');
 
+            // --- Referências do DOM ---
             const welcomeMessage = document.getElementById('welcome-message');
             const logoutBtn = document.getElementById('logout-btn');
             const reportsList = document.getElementById('reports-list');
@@ -117,6 +118,7 @@
                 "FALHA NA COMUNICACAO EM RAZAO DE FALTA DE ENERGIA", "LENTIDÃO DO LINK PRINCIPAL DE INTERNET", "Outro"
             ];
 
+            // --- Configuração Inicial da UI ---
             welcomeMessage.textContent = `Bem-vindo, ${user.username}! (Papel: ${user.role})`;
             logoutBtn.addEventListener('click', () => {
                 localStorage.removeItem('authToken');
@@ -124,22 +126,38 @@
                 window.location.href = '/';
             });
 
-            async function fetchPrivateData() {
-                const headers = { 'Authorization': `Bearer ${token}` };
+            // --- Funções de Comunicação com a API ---
+            async function fetchApi(path, options = {}) {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    ...options.headers,
+                };
+                
                 try {
-                    const [reportsRes, locationsRes] = await Promise.all([
-                        fetch('/api/reports', { headers }),
-                        fetch('/api/locations', { headers })
-                    ]);
-                    if (!reportsRes.ok || !locationsRes.ok) throw new Error('Sessão inválida.');
-                    return await Promise.all([reportsRes.json(), locationsRes.json()]);
+                    const response = await fetch(path, { ...options, headers });
+                    if (!response.ok) {
+                        // Se o token for inválido, o backend retorna 401, redirecionamos para o login
+                        if (response.status === 401 || response.status === 403) {
+                            localStorage.removeItem('authToken');
+                            localStorage.removeItem('user');
+                            window.location.href = '/login.html';
+                        }
+                        throw new Error(`Erro na API: ${response.statusText}`);
+                    }
+                    // Se a resposta não tiver conteúdo (ex: DELETE), retorna sucesso
+                    if (response.status === 204) {
+                        return true;
+                    }
+                    return await response.json();
                 } catch (error) {
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('user');
-                    window.location.href = '/login.html';
+                    console.error(`Erro na chamada da API para ${path}:`, error);
+                    // Lança o erro para que a função que chamou possa tratá-lo
+                    throw error;
                 }
             }
 
+            // --- Funções de Renderização ---
             function renderReports(reports) {
                 reportsList.innerHTML = '';
                 if (!reports || reports.length === 0) {
@@ -212,6 +230,7 @@
                 });
             }
 
+            // --- Lógica dos Formulários ---
             reportForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const reportData = {
@@ -223,16 +242,16 @@
                     closure_time: document.getElementById('report-closure-time').value,
                 };
                 
-                const response = await fetch('/api/reports', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(reportData)
-                });
-                if (response.ok) {
+                try {
+                    await fetchApi('/api/reports', {
+                        method: 'POST',
+                        body: JSON.stringify(reportData)
+                    });
                     reportForm.reset();
+                    document.getElementById('report-date').valueAsDate = new Date();
                     initialize();
-                } else {
-                    alert('Erro ao salvar relatório.');
+                } catch (error) {
+                    alert('Erro ao salvar relatório. Verifique os logs do console para mais detalhes.');
                 }
             });
 
@@ -240,47 +259,115 @@
                 e.preventDefault();
                 const name = locationNameInput.value.trim();
                 if (!name) return;
-                const response = await fetch('/api/locations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ name })
-                });
-                if (response.ok) {
+                try {
+                    await fetchApi('/api/locations', {
+                        method: 'POST',
+                        body: JSON.stringify({ name })
+                    });
                     locationNameInput.value = '';
                     initialize();
-                } else {
-                    alert('Erro ao salvar local.');
+                } catch (error) {
+                    alert('Erro ao salvar local. Verifique os logs do console para mais detalhes.');
                 }
             });
 
+            // --- Delegação de Eventos para Exclusão ---
             locationsList.addEventListener('click', async (e) => {
                 if (e.target.classList.contains('delete-location-btn')) {
-                    if (confirm('Tem certeza?')) {
-                        await fetch(`/api/locations/${e.target.dataset.id}`, {
-                            method: 'DELETE',
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        initialize();
+                    if (confirm('Tem certeza que deseja excluir este local?')) {
+                        try {
+                            await fetchApi(`/api/locations/${e.target.dataset.id}`, { method: 'DELETE' });
+                            initialize();
+                        } catch (error) {
+                            alert('Erro ao excluir local.');
+                        }
                     }
                 }
             });
 
+            // --- Lógica de Geração de Relatórios ---
             function generateReport(period) {
-                // ... (código de geração de relatório)
+                const now = new Date();
+                let startDate;
+                let reportTitle = '';
+
+                if (period === 'weekly') {
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+                    reportTitle = 'Relatório Semanal de Incidentes';
+                } else { // monthly
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    startDate.setMonth(startDate.getMonth() - 1);
+                    reportTitle = 'Relatório Mensal de Incidentes';
+                }
+
+                const filteredReports = allReportsData.filter(report => {
+                    const reportDate = new Date(report.report_date);
+                    return reportDate >= startDate && reportDate <= now;
+                });
+
+                let reportHTML = `
+                    <html>
+                    <head>
+                        <title>${reportTitle}</title>
+                        <script src="https://cdn.tailwindcss.com"><\/script>
+                        <style> 
+                            @media print { .no-print { display: none; } } 
+                            body { font-family: 'Inter', sans-serif; }
+                        </style>
+                    </head>
+                    <body class="bg-gray-100 p-8">
+                        <div class="max-w-4xl mx-auto bg-white p-10 rounded-lg shadow-lg">
+                            <div class="flex justify-between items-center mb-8">
+                                <div>
+                                    <h1 class="text-3xl font-bold text-gray-800">${reportTitle}</h1>
+                                    <p class="text-gray-500">Período: ${startDate.toLocaleDateString('pt-BR')} - ${now.toLocaleDateString('pt-BR')}</p>
+                                </div>
+                                <button onclick="window.print()" class="no-print bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-700">Imprimir</button>
+                            </div>
+                            <div class="space-y-4">
+                `;
+
+                if (filteredReports.length > 0) {
+                    filteredReports.forEach(report => {
+                        const formattedDate = new Date(report.report_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                        reportHTML += `
+                            <div class="bg-gray-50 p-4 rounded-lg border">
+                                <p><strong class="font-semibold">Data:</strong> ${formattedDate}</p>
+                                <p><strong class="font-semibold">Local:</strong> ${report.location}</p>
+                                <p><strong class="font-semibold">Incidente:</strong> ${report.description}</p>
+                                ${report.comments ? `<p><strong class="font-semibold">Comentários:</strong> ${report.comments}</p>` : ''}
+                            </div>
+                        `;
+                    });
+                } else {
+                    reportHTML += '<p class="text-gray-500">Nenhum incidente registrado neste período.</p>';
+                }
+
+                reportHTML += `</div></div></body></html>`;
+
+                const reportWindow = window.open('', '_blank');
+                reportWindow.document.write(reportHTML);
+                reportWindow.document.close();
             }
 
             weeklyReportBtn.addEventListener('click', () => generateReport('weekly'));
             monthlyReportBtn.addEventListener('click', () => generateReport('monthly'));
 
+            // --- Inicialização da Página ---
             async function initialize() {
-                const [reports, locations] = await fetchPrivateData();
-                allReportsData = reports;
-                renderReports(reports);
-                renderLocations(locations);
-                updateDashboard(reports);
-                updateLocationDropdown(locations);
-                populateIncidentSelect();
-                document.getElementById('report-date').valueAsDate = new Date();
+                try {
+                    const [reports, locations] = await fetchPrivateData();
+                    allReportsData = reports;
+                    renderReports(reports);
+                    renderLocations(locations);
+                    updateDashboard(reports);
+                    updateLocationDropdown(locations);
+                    populateIncidentSelect();
+                    document.getElementById('report-date').valueAsDate = new Date();
+                } catch(e) {
+                    // O erro de redirecionamento já é tratado em fetchApi
+                    console.log("Redirecionando para a página de login devido a erro ou sessão expirada.");
+                }
             }
 
             initialize();
