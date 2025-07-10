@@ -50,7 +50,6 @@
                 localStorage.setItem('authToken', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
                 
-                // AQUI ESTÁ A MUDANÇA: Redireciona para o novo dashboard privado
                 window.location.href = '/dashboard.html';
 
             } catch (error) {
